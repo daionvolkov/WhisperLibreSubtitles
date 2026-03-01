@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WhisperApi", "..\WhisperApi\WhisperApi.csproj", "{46DE1B72-68FB-477A-8B0E-C9455029B004}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TranslationApi", "TranslationApi\TranslationApi.csproj", "{DCA66F37-27E8-40C1-BB74-6CCB8A23227C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{46DE1B72-68FB-477A-8B0E-C9455029B004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46DE1B72-68FB-477A-8B0E-C9455029B004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46DE1B72-68FB-477A-8B0E-C9455029B004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46DE1B72-68FB-477A-8B0E-C9455029B004}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DCA66F37-27E8-40C1-BB74-6CCB8A23227C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DCA66F37-27E8-40C1-BB74-6CCB8A23227C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DCA66F37-27E8-40C1-BB74-6CCB8A23227C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DCA66F37-27E8-40C1-BB74-6CCB8A23227C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
