@@ -146,9 +146,9 @@ public sealed class SubtitleTranscriptionService
             {
                 ["1"] = new Dictionary<string, string> { [detectedLang] = "" }
             },
-            Languages = new Dictionary<string, string>
+            Languages = new Dictionary<string, List<string>>
             {
-                ["1"] = detectedLang
+                ["1"] = targets
             },
             Subtitles = subtitles
         };

@@ -8,7 +8,7 @@ public sealed class SubtitleResponse
     public Dictionary<string, Dictionary<string, string>> Speakers { get; set; } = new();
 
     [JsonPropertyName("languages")]
-    public Dictionary<string, string> Languages { get; set; } = new();
+    public Dictionary<string, List<string>> Languages { get; set; } = new();
 
     [JsonPropertyName("subtitles")]
     public List<SubtitleItem> Subtitles { get; set; } = new();
