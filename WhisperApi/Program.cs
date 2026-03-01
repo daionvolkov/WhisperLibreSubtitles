@@ -18,7 +18,13 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
-
+builder.Services.AddHttpClient<TranslationApiClient>((sp, http) =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var baseUrl = cfg["TranslationApi:BaseUrl"] ?? "http://translation-api:3830";
+    http.BaseAddress = new Uri(baseUrl);
+    http.Timeout = TimeSpan.FromSeconds(60);
+});
 
 // config-driven URL/port
 var url = builder.Configuration["Kestrel:Endpoints:Http:Url"] ?? "http://0.0.0.0:3823";

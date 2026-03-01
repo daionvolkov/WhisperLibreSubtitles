@@ -11,102 +11,159 @@ public sealed class SubtitleTranscriptionService
     private readonly IConfiguration _cfg;
     private readonly AudioDownloadService _downloader;
     private readonly ILogger<SubtitleTranscriptionService> _logger;
+    private readonly TranslationApiClient _translationApi;
 
     public SubtitleTranscriptionService(IConfiguration cfg, AudioDownloadService downloader, 
-        ILogger<SubtitleTranscriptionService> logger)
+        ILogger<SubtitleTranscriptionService> logger, TranslationApiClient translationApi)
     {
         _cfg = cfg;
         _downloader = downloader;
         _logger = logger;
+        _translationApi = translationApi;
+        _logger = logger;
     }
 
-    public async Task<string> TranscribeUrlToSubtitlesJsonAsync(string mediaUrl, string language, CancellationToken ct)
+   public async Task<string> TranscribeUrlToSubtitlesJsonAsync(string mediaUrl, string language, CancellationToken ct)
     {
-        var tempRoot = _cfg["Transcription:TempDir"] ?? "/tmp/whisper-api";
-        Directory.CreateDirectory(tempRoot);
+    var tempRoot = _cfg["Transcription:TempDir"] ?? "/tmp/whisper-api";
+    Directory.CreateDirectory(tempRoot);
 
-        var jobDir = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(jobDir);
+    var jobDir = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(jobDir);
 
-        try
+    try
+    {
+        var wavPath = await _downloader.DownloadAndConvertToWav16KMonoAsync(mediaUrl, jobDir, ct);
+
+        var whisperExe = _cfg["Transcription:WhisperCppExePath"] ?? "/app/whisper.cpp/main";
+        var modelPath  = _cfg["Transcription:WhisperModelPath"] ?? "/app/whisper.cpp/models/ggml-base.bin";
+
+        var threads = ParseInt(_cfg["Transcription:WhisperThreads"], 4);
+        var beam    = ParseInt(_cfg["Transcription:WhisperBeamSize"], 5);
+        var bestOf  = ParseInt(_cfg["Transcription:WhisperBestOf"], 5);
+
+        var outBase = Path.Combine(jobDir, "out");
+        var outJson = outBase + ".json";
+        
+        var requested = (language ?? "auto")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        if (requested.Count == 0)
+            requested.Add("auto");
+
+        var whisperLang = "auto";
+
+        var args = new List<string>
         {
-            var wavPath = await _downloader.DownloadAndConvertToWav16KMonoAsync(mediaUrl, jobDir, ct);
+            "-m", modelPath,
+            "-f", wavPath,
+            "-of", outBase,
+            "-oj",
+            "-t", threads.ToString()
+        };
 
-            var whisperExe = _cfg["Transcription:WhisperCppExePath"] ?? "/app/whisper.cpp/main";
-            var modelPath  = _cfg["Transcription:WhisperModelPath"] ?? "/app/whisper.cpp/models/ggml-base.bin";
+        if (!string.Equals(whisperLang, "auto", StringComparison.OrdinalIgnoreCase))
+        {
+            args.Add("-l");
+            args.Add(whisperLang);
+        }
 
-            var threads = ParseInt(_cfg["Transcription:WhisperThreads"], 4);
-            var beam    = ParseInt(_cfg["Transcription:WhisperBeamSize"], 5);
-            var bestOf  = ParseInt(_cfg["Transcription:WhisperBestOf"], 5);
+        args.Add("--beam-size"); args.Add(beam.ToString());
+        args.Add("--best-of");   args.Add(bestOf.ToString());
 
-            var outBase = Path.Combine(jobDir, "out");
-            var outJson = outBase + ".json";
+        _logger.LogInformation("Running whisper.cpp...");
+        await RunProcessAsync(whisperExe, args, jobDir, ct);
 
-            var args = new List<string>
+        if (!File.Exists(outJson))
+        {
+            outJson = Directory.GetFiles(jobDir, "*.json")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault()
+                ?? throw new InvalidOperationException("whisper.cpp finished but no JSON output was found.");
+        }
+
+        var whisperJson = await File.ReadAllTextAsync(outJson, ct);
+
+        var (segments, detectedLang) = ExtractSegments(whisperJson, whisperLang);
+        
+        var targets = requested.Contains("auto")
+            ? new List<string> { detectedLang }
+            : requested;
+
+        if (!targets.Contains(detectedLang))
+            targets.Insert(0, detectedLang);
+
+        var subtitles = new List<SubtitleItem>(segments.Count);
+
+        foreach (var s in segments)
+        {
+            var textMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                "-m", modelPath,
-                "-f", wavPath,
-                "-of", outBase,
-                "-oj",
-                "-t", threads.ToString()
+                [detectedLang] = s.Text
             };
 
-            if (!string.Equals(language, "auto", StringComparison.OrdinalIgnoreCase))
+            var otherTargets = targets
+                .Where(t => !string.Equals(t, detectedLang, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (otherTargets.Count > 0)
             {
-                args.Add("-l");
-                args.Add(language);
+                try
+                {
+                    var translations = await _translationApi.TranslateManyAsync(
+                        s.Text,
+                        detectedLang,
+                        otherTargets,
+                        ct);
+
+                    foreach (var kv in translations)
+                        textMap[kv.Key.ToLowerInvariant()] = kv.Value;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Translation failed. detectedLang={DetectedLang}, targets={Targets}",
+                        detectedLang,
+                        string.Join(",", otherTargets));
+                }
             }
 
-            // decoding params (optional)
-            args.Add("--beam-size"); args.Add(beam.ToString());
-            args.Add("--best-of"); args.Add(bestOf.ToString());
-
-            _logger.LogInformation("Running whisper.cpp...");
-            await RunProcessAsync(whisperExe, args, jobDir, ct);
-
-            if (!File.Exists(outJson))
+            subtitles.Add(new SubtitleItem
             {
-                outJson = Directory.GetFiles(jobDir, "*.json").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
-                          ?? throw new InvalidOperationException("whisper.cpp finished but no JSON output was found.");
-            }
-
-            var whisperJson = await File.ReadAllTextAsync(outJson, ct);
-
-            var (segments, detectedLang) = ExtractSegments(whisperJson, language);
-
-            var response = new SubtitleResponse
-            {
-                Speakers = new Dictionary<string, Dictionary<string, string>>
-                {
-                    ["1"] = new Dictionary<string, string> { [detectedLang] = "" }
-                },
-                Languages = new Dictionary<string, string>
-                {
-                    ["1"] = detectedLang
-                },
-                Subtitles = segments.Select(s => new SubtitleItem
-                {
-                    Start = TimeFormat.ToHhMmSsMmm(s.StartSeconds),
-                    End   = TimeFormat.ToHhMmSsMmm(s.EndSeconds),
-                    SpeakerId = 1,
-                    Text = new Dictionary<string, string> { [detectedLang] = s.Text }
-                }).ToList()
-            };
-
-            return JsonSerializer.Serialize(response, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = null,
-                WriteIndented = false
+                Start = TimeFormat.ToHhMmSsMmm(s.StartSeconds),
+                End   = TimeFormat.ToHhMmSsMmm(s.EndSeconds),
+                SpeakerId = 1,
+                Text = textMap.ToDictionary(k => k.Key.ToLowerInvariant(), v => v.Value)
             });
         }
-        finally
+
+        var response = new SubtitleResponse
         {
-            try { Directory.Delete(jobDir, recursive: true); }
-            catch
+            Speakers = new Dictionary<string, Dictionary<string, string>>
             {
-                // ignored
-            }
-        }
+                ["1"] = new Dictionary<string, string> { [detectedLang] = "" }
+            },
+            Languages = new Dictionary<string, string>
+            {
+                ["1"] = detectedLang
+            },
+            Subtitles = subtitles
+        };
+
+        return JsonSerializer.Serialize(response, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = null,
+            WriteIndented = false
+        });
+    }
+    finally
+    {
+        try { Directory.Delete(jobDir, true); }
+        catch { }
+    }
     }
 
     private static int ParseInt(string? s, int fallback)
@@ -212,7 +269,7 @@ public sealed class SubtitleTranscriptionService
             list.Add(new Segment(start ?? 0, end ?? (start ?? 0), text));
         }
 
-        return list;
+        return list; 
     }
 
     private static List<Segment> ParseTranscriptionArray(JsonArray trArray)
