@@ -1,3 +1,4 @@
+using Serilog;
 using WhisperApi.Services;
 
 
@@ -6,6 +7,11 @@ var builder = WebApplication.CreateBuilder(args);
 // logging
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole();
+
+builder.Host.UseSerilog((ctx, services, cfg) =>
+    cfg.ReadFrom.Configuration(ctx.Configuration)
+);
+
 
 // CORS
 builder.Services.AddCors(options =>
