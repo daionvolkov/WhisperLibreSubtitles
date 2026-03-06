@@ -67,12 +67,22 @@ public sealed class SubtitleTranscriptionService
 
         if (!string.Equals(whisperLang, "auto", StringComparison.OrdinalIgnoreCase))
         {
+            args.Add("--detect-language");
+        }
+        else
+        {
             args.Add("-l");
             args.Add(whisperLang);
         }
 
         args.Add("--beam-size"); args.Add(beam.ToString());
+        args.Add(beam.ToString());
+
         args.Add("--best-of");   args.Add(bestOf.ToString());
+        args.Add(bestOf.ToString());
+        args.Add("--max-context");
+        args.Add("0");
+
 
         _logger.LogInformation("Running whisper.cpp...");
         await RunProcessAsync(whisperExe, args, jobDir, ct);
