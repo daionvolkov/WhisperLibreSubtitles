@@ -1,6 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Diagnostics;
 using WhisperApi.Models;
 using WhisperApi.Utils;
 
@@ -8,7 +8,7 @@ namespace WhisperApi.Services;
 
 public sealed class SubtitleTranscriptionService
 {
-    private readonly IConfiguration _cfg;
+     private readonly IConfiguration _cfg;
     private readonly AudioDownloadService _downloader;
     private readonly ILogger<SubtitleTranscriptionService> _logger;
     private readonly TranslationApiClient _translationApi;
@@ -39,6 +39,7 @@ public sealed class SubtitleTranscriptionService
         var modelPath  = _cfg["Transcription:WhisperModelPath"] ?? "/app/whisper.cpp/models/ggml-base.bin";
 
         var threads = ParseInt(_cfg["Transcription:WhisperThreads"], 4);
+
         var beam    = ParseInt(_cfg["Transcription:WhisperBeamSize"], 5);
         var bestOf  = ParseInt(_cfg["Transcription:WhisperBestOf"], 5);
 
@@ -55,7 +56,7 @@ public sealed class SubtitleTranscriptionService
             requested.Add("auto");
 
         var whisperLang = "auto";
-
+        
         var args = new List<string>
         {
             "-m", modelPath,
@@ -82,7 +83,6 @@ public sealed class SubtitleTranscriptionService
         args.Add(bestOf.ToString());
         args.Add("--max-context");
         args.Add("0");
-
 
         _logger.LogInformation("Running whisper.cpp...");
         await RunProcessAsync(whisperExe, args, jobDir, ct);
@@ -197,8 +197,7 @@ public sealed class SubtitleTranscriptionService
         var lang =
             ReadString(node?["language"]) ??
             ReadString(node?["result"]?["language"]) ??
-            ReadString(node?["params"]?["language"]) ??
-            (string.Equals(requestedLanguage, "auto", StringComparison.OrdinalIgnoreCase) ? "en" : requestedLanguage);
+            requestedLanguage;
 
         if (node?["segments"] is JsonArray segsArray)
             return (ParseSegmentsArray(segsArray), lang);
