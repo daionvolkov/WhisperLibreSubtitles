@@ -4,13 +4,16 @@ namespace TranslationApi.Models;
 
 public sealed class TranslateRequest
 {
-    [JsonPropertyName("text")]
-    public string Text { get; set; } = "";
+    [JsonPropertyName("subtitlesJson")]
+    public string SubtitlesJson { get; set; } = "";
 
-    // "auto" | "en" | "ru" ...
-    [JsonPropertyName("source")]
-    public string? Source { get; set; }
+    [JsonPropertyName("targetLanguages")]
+    public string[] TargetLanguages { get; set; } = [];
 
+    // Backward-compatible alias in case the client still sends the old field name.
     [JsonPropertyName("targets")]
-    public string[] Targets { get; set; } = [];
+    public string[]? Targets { get; set; }
+
+    public string[] GetRequestedTargetLanguages()
+        => TargetLanguages.Length > 0 ? TargetLanguages : Targets ?? [];
 }

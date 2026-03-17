@@ -25,26 +25,40 @@ public class TranslationController : ControllerBase
         => Ok(new { ok = true });
 
     [HttpPost("translate")]
-    public async Task<ActionResult<TranslateResponse>> Translate([FromBody] TranslateRequest request,
+    public async Task<ActionResult<SubtitleTranslationDocument>> Translate([FromBody] TranslateRequest request,
         CancellationToken ct)
     {
-        _logger.LogInformation("Incoming language param: {Language}", request.Source);
-        if (string.IsNullOrWhiteSpace(request.Text))
-            return BadRequest("Text is required");
+        var targetLanguages = request.GetRequestedTargetLanguages();
 
-        if (request.Targets.Length == 0)
-            return BadRequest("Targets are required");
+        _logger.LogInformation("Incoming translation request for {TargetCount} target languages", targetLanguages.Length);
 
-        var (sourceLang, dict) = await _service.TranslateManyAsync(
-            request.Text,
-            request.Source ?? "auto",
-            request.Targets,
-            ct);
+        if (string.IsNullOrWhiteSpace(request.SubtitlesJson))
+            return BadRequest("subtitlesJson is required");
 
-        return Ok(new TranslateResponse
+        if (targetLanguages.Length == 0)
+            return BadRequest("targetLanguages is required");
+
+        try
         {
-            Source = sourceLang,
-            Translations = dict
-        });
+            var translatedDocument = await _service.TranslateSubtitlesAsync(
+                request.SubtitlesJson,
+                targetLanguages,
+                ct);
+
+            return Ok(translatedDocument);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid subtitles JSON payload");
+            return BadRequest("subtitlesJson must contain valid JSON in the expected structure");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Translation provider returned an error");
+            return StatusCode(StatusCodes.Status502BadGateway, new
+            {
+                error = ex.Message
+            });
+        }
     }
 }

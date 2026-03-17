@@ -1,0 +1,38 @@
+services:
+  translation-api:
+    container_name: translation-api
+    build:
+      context: .
+      dockerfile: TranslationApi/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3830:3830"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://0.0.0.0:3830"
+      LibreTranslate__BaseUrl: "http://libretranslate:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3830/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      libretranslate:
+        condition: service_healthy
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: libretranslate
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      LT_UPDATE_MODELS: "true"
+    volumes:
+/     - /opt/whisper_libre_subtitles/libretranslate/data:/home/libretranslate/.local/share
+      - /opt/whisper_libre_subtitles/libretranslate/cache:/home/libretranslate/.local/cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/languages')"]
+      interval: 15s
+      timeout: 5s
+      retries: 40

@@ -1,6 +1,7 @@
-@TranslationApi_HostAddress = http://localhost:5023
+@TranslationApi_HostAddress = http://localhost:3830
 
-GET {{TranslationApi_HostAddress}}/weatherforecast/
+GET {{TranslationApi_HostAddress}}/health
 Accept: application/json
 
 ###
+
